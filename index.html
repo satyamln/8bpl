@@ -2,8 +2,12 @@
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>8 Ball Pool — Supabase MVP</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="screen-orientation" content="landscape" />
+  <meta name="x5-orientation" content="landscape" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>8 Ball Pool</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js"></script>
@@ -15,246 +19,370 @@
           fontFamily: {
             sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
             mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace']
-          },
-          colors: {
-            brand: { 400: '#3ECF8E', 500: '#24B47E' },
-            surface: { 950: '#090D12', 900: '#111720', 800: '#1B2432', 700: '#2A3648' }
           }
         }
       }
     };
   </script>
   <style>
-    body {
-      background: #090D12;
-      color: #F1F5F9;
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100dvh;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 45%, #162235 0%, #090E17 100%);
+      color: #F8FAFC;
       font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       overscroll-behavior: none;
-    }
-    canvas {
-      touch-action: none;
       user-select: none;
       -webkit-user-select: none;
     }
+    canvas {
+      touch-action: none;
+    }
+    #power-track {
+      touch-action: none;
+    }
+    .hud-metal {
+      background: linear-gradient(180deg, #273244 0%, #161D29 100%);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 4px 14px rgba(0,0,0,0.45);
+    }
+    .avatar-active {
+      box-shadow: 0 0 0 2.5px #38BDF8, 0 0 14px rgba(56, 189, 248, 0.7);
+    }
+    .avatar-idle {
+      box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.25);
+    }
+    @keyframes pulse-ring {
+      0%, 100% { transform: scale(1); opacity: 0.9; }
+      50% { transform: scale(1.06); opacity: 1; }
+    }
   </style>
 </head>
-<body class="min-h-screen flex flex-col antialiased">
+<body class="flex flex-col">
 
-  <!-- ==================== TOP BAR ==================== -->
-  <header class="bg-surface-900/95 border-b border-surface-800 sticky top-0 z-30">
-    <div class="max-w-6xl mx-auto px-3 sm:px-5 h-14 flex items-center justify-between gap-2">
-      <!-- Player Profile Pill -->
-      <button id="btn-open-profile" type="button" class="flex items-center gap-2.5 bg-surface-800 hover:bg-surface-700 border border-surface-700 rounded-full pl-1.5 pr-3 py-1 transition cursor-pointer min-w-0">
-        <img id="nav-avatar" alt="DP" class="w-7 h-7 rounded-full object-cover bg-surface-950 border border-brand-400/50 shrink-0" />
-        <div class="text-left min-w-0">
-          <div id="nav-username" class="text-xs font-semibold text-white truncate max-w-[110px] sm:max-w-[150px]">Guest Player</div>
-          <div class="text-[10px] text-slate-400 leading-none" id="nav-auth-tag">Local Mode</div>
-        </div>
-      </button>
+  <!-- ==================== PORTRAIT -> LANDSCAPE OVERLAY (MOBILE) ==================== -->
+  <div id="rotate-overlay" class="hidden fixed inset-0 z-50 bg-[#090E17]/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center">
+    <div class="w-16 h-16 rounded-2xl bg-sky-500/15 border border-sky-400/40 text-sky-400 flex items-center justify-center mb-4">
+      <i data-lucide="smartphone" class="w-8 h-8 rotate-90"></i>
+    </div>
+    <h2 class="text-lg font-bold text-white mb-1">Rotate Your Phone</h2>
+    <p class="text-xs text-slate-400 max-w-xs mb-5">8 Ball Pool plays best in horizontal landscape mode.</p>
+    <button id="btn-force-landscape" type="button"
+      class="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition cursor-pointer mb-3">
+      Enter Fullscreen Landscape
+    </button>
+    <button id="btn-dismiss-rotate" type="button"
+      class="text-xs text-slate-500 hover:text-slate-300 underline cursor-pointer">
+      Continue anyway
+    </button>
+  </div>
 
-      <!-- Coins + Free Ad Coins -->
-      <div class="flex items-center gap-1.5 sm:gap-2">
-        <div class="flex items-center gap-1.5 bg-surface-950 border border-amber-500/30 rounded-full px-3 py-1">
-          <i data-lucide="coins" class="w-3.5 h-3.5 text-amber-400"></i>
-          <span id="nav-coins" class="text-xs font-bold text-amber-300 font-mono">1,000</span>
-        </div>
-        <button id="btn-watch-ad" type="button"
-          class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-amber-500 hover:bg-amber-400 text-surface-950 text-[11px] font-bold transition cursor-pointer shrink-0">
-          <i data-lucide="play-circle" class="w-3.5 h-3.5"></i>
-          <span class="hidden sm:inline">+500 Ad</span>
-          <span class="sm:hidden">+500</span>
+  <!-- ==================== WELCOME / LOGIN OVERLAY ==================== -->
+  <div id="welcome-overlay" class="hidden fixed inset-0 z-40 bg-gradient-to-b from-[#0E1B2E]/95 to-[#070B12]/98 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-full max-w-sm bg-[#121A26] border border-slate-700/80 rounded-2xl p-6 text-center shadow-2xl">
+      <div class="w-14 h-14 rounded-full bg-slate-950 border-4 border-sky-400/80 flex items-center justify-center mx-auto mb-3 shadow-lg">
+        <span class="w-7 h-7 rounded-full bg-white text-slate-950 font-black text-base flex items-center justify-center">8</span>
+      </div>
+      <h1 class="text-2xl font-black tracking-tight text-white">8 BALL POOL</h1>
+      <p class="text-xs text-slate-400 mt-1 mb-5">Sign in to sync your coins, wins &amp; profile</p>
+
+      <div class="space-y-2.5">
+        <button id="btn-welcome-login" type="button"
+          class="w-full py-3 rounded-xl bg-sky-500 hover:bg-sky-400 text-white font-bold text-sm shadow-lg transition cursor-pointer flex items-center justify-center gap-2">
+          <i data-lucide="log-in" class="w-4 h-4"></i>
+          Login / Sign Up
+        </button>
+        <button id="btn-welcome-guest" type="button"
+          class="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm shadow-lg transition cursor-pointer flex items-center justify-center gap-2">
+          <i data-lucide="play" class="w-4 h-4"></i>
+          Play as Guest
         </button>
       </div>
+    </div>
+  </div>
 
-      <!-- Controls -->
-      <div class="flex items-center gap-1.5">
-        <button id="btn-mute" type="button" title="Toggle Sound"
-          class="p-2 rounded-lg bg-surface-800 hover:bg-surface-700 text-slate-300 transition cursor-pointer">
-          <i id="icon-mute" data-lucide="volume-2" class="w-4 h-4"></i>
+  <!-- ==================== TOP 8-BALL-POOL HUD ==================== -->
+  <header class="hud-metal border-b border-slate-700/60 px-2 sm:px-4 py-1.5 shrink-0 z-20">
+    <div class="max-w-6xl mx-auto flex items-center justify-between gap-2">
+
+      <!-- Left: Menu Button -->
+      <button id="btn-menu" type="button" title="Menu"
+        class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 flex items-center justify-center shadow cursor-pointer shrink-0 transition">
+        <i data-lucide="menu" class="w-5 h-5"></i>
+      </button>
+
+      <!-- Center: Player 1 | Pot | Player 2 -->
+      <div class="flex-1 flex items-center justify-center gap-2 sm:gap-4 min-w-0">
+
+        <!-- Player 1 Info & 7-Ball Slots -->
+        <div class="flex items-center gap-2 min-w-0">
+          <div class="flex flex-col items-end min-w-0">
+            <span id="hud-p1-name" class="text-[11px] sm:text-xs font-bold text-white truncate max-w-[90px] sm:max-w-[140px]">Guest</span>
+            <div id="p1-slots" class="flex items-center gap-0.5 sm:gap-1 mt-0.5"></div>
+          </div>
+          <button id="btn-open-profile" type="button" title="Profile & Account"
+            class="relative w-9 h-9 sm:w-11 sm:h-11 rounded-xl overflow-hidden bg-slate-900 avatar-active shrink-0 cursor-pointer transition">
+            <img id="nav-avatar" alt="Player" class="w-full h-full object-cover" />
+          </button>
+        </div>
+
+        <!-- Center Pot & Coins Pill -->
+        <div class="flex flex-col items-center justify-center px-2.5 sm:px-3.5 py-1 rounded-xl bg-slate-950/80 border border-slate-700/70 shrink-0">
+          <div class="flex items-center gap-1 text-amber-400 font-bold text-xs sm:text-sm font-mono leading-none">
+            <i data-lucide="coins" class="w-3.5 h-3.5"></i>
+            <span id="hud-pot">200</span>
+          </div>
+          <button id="btn-watch-ad" type="button" title="Get +500 Free Coins"
+            class="mt-0.5 text-[10px] font-bold text-emerald-400 hover:text-emerald-300 cursor-pointer leading-none">
+            <span id="nav-coins">1,000</span> • +500
+          </button>
+        </div>
+
+        <!-- Player 2 / AI Info & 7-Ball Slots -->
+        <div class="flex items-center gap-2 min-w-0">
+          <div id="p2-avatar-wrap" class="w-9 h-9 sm:w-11 sm:h-11 rounded-xl overflow-hidden bg-slate-900 avatar-idle shrink-0 flex items-center justify-center text-sky-400">
+            <i data-lucide="bot" class="w-5 h-5"></i>
+          </div>
+          <div class="flex flex-col items-start min-w-0">
+            <span id="hud-p2-name" class="text-[11px] sm:text-xs font-bold text-slate-200 truncate max-w-[90px] sm:max-w-[140px]">AI Bot</span>
+            <div id="p2-slots" class="flex items-center gap-0.5 sm:gap-1 mt-0.5"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Spin Selector & Fullscreen -->
+      <div class="flex items-center gap-1.5 shrink-0">
+        <button id="btn-spin" type="button" title="Cue Ball Spin"
+          class="relative w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-white via-slate-100 to-slate-300 border-2 border-slate-500 shadow-inner flex items-center justify-center cursor-pointer transition hover:scale-105">
+          <span id="spin-dot-indicator" class="w-2.5 h-2.5 rounded-full bg-rose-600 shadow transition-transform"></span>
         </button>
-        <button id="btn-open-sql" type="button" title="Supabase SQL & Keys"
-          class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-surface-800 hover:bg-surface-700 text-brand-400 text-xs font-semibold transition cursor-pointer">
-          <i data-lucide="database" class="w-3.5 h-3.5"></i>
-          <span class="hidden sm:inline">DB Setup</span>
+        <button id="btn-fullscreen" type="button" title="Fullscreen"
+          class="hidden sm:flex w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 items-center justify-center cursor-pointer transition">
+          <i data-lucide="maximize" class="w-4 h-4"></i>
         </button>
       </div>
     </div>
   </header>
 
-  <!-- ==================== MAIN GAME AREA ==================== -->
-  <main class="max-w-6xl w-full mx-auto px-3 sm:px-5 py-3 sm:py-4 flex-1 flex flex-col gap-3">
+  <!-- ==================== MAIN LANDSCAPE STAGE ==================== -->
+  <main class="flex-1 min-h-0 flex items-center justify-center gap-2 sm:gap-4 px-2 sm:px-5 py-2 relative overflow-hidden">
 
-    <!-- Match HUD -->
-    <section class="bg-surface-900 border border-surface-800 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-2">
-      <!-- Player 1 -->
-      <div id="hud-p1" class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-brand-400/15 border border-brand-400/40 transition">
-        <span class="w-2 h-2 rounded-full bg-brand-400"></span>
-        <span id="hud-p1-name" class="text-xs font-bold text-white">You</span>
-        <span id="hud-p1-group" class="text-[11px] px-1.5 py-0.5 rounded bg-surface-950 text-slate-300 font-medium">Open</span>
-      </div>
+    <!-- LEFT VERTICAL PULL-DOWN POWER BAR (8 BALL POOL STYLE) -->
+    <aside class="flex flex-col items-center justify-center h-full max-h-[340px] w-11 sm:w-13 shrink-0 z-10">
+      <div id="power-track"
+        class="relative w-10 sm:w-11 h-full rounded-2xl bg-slate-950/90 border-2 border-slate-700/80 shadow-2xl overflow-hidden cursor-ns-resize flex flex-col items-center">
+        <!-- Power Gradient Fill -->
+        <div id="power-fill"
+          class="absolute top-0 left-0 right-0 rounded-t-xl pointer-events-none transition-[height] duration-75"
+          style="height: 0%; background: linear-gradient(180deg, #22C55E 0%, #EAB308 55%, #EF4444 100%);"></div>
 
-      <!-- Center Status & Mode -->
-      <div class="flex flex-col items-center text-center order-last sm:order-none w-full sm:w-auto">
-        <div id="game-status" class="text-xs sm:text-sm font-semibold text-white">Your Turn — Drag on table to aim &amp; pull back</div>
-        <div class="flex items-center gap-2 mt-1">
-          <select id="select-mode" aria-label="Game Mode"
-            class="rounded-lg bg-surface-950 border border-surface-700 px-2 py-1 text-[11px] text-slate-200 cursor-pointer focus:outline-none focus:border-brand-400">
-            <option value="ai">vs AI Bot</option>
-            <option value="2p">2P Pass &amp; Play</option>
-          </select>
-          <select id="select-stake" aria-label="Match Stake"
-            class="rounded-lg bg-surface-950 border border-surface-700 px-2 py-1 text-[11px] text-amber-300 cursor-pointer focus:outline-none focus:border-amber-400">
-            <option value="100">Stake: 100</option>
-            <option value="250">Stake: 250</option>
-            <option value="500">Stake: 500</option>
-          </select>
-          <button id="btn-new-rack" type="button"
-            class="px-2.5 py-1 rounded-lg bg-surface-800 hover:bg-surface-700 text-slate-200 text-[11px] font-semibold cursor-pointer">
-            New Match
-          </button>
+        <!-- Tick Marks -->
+        <div class="absolute inset-0 pointer-events-none flex flex-col justify-between py-3 px-1.5 opacity-35">
+          <div class="h-px bg-white"></div>
+          <div class="h-px bg-white"></div>
+          <div class="h-px bg-white"></div>
+          <div class="h-px bg-white"></div>
+          <div class="h-px bg-white"></div>
+          <div class="h-px bg-white"></div>
+        </div>
+
+        <!-- Draggable Mini Cue Stick Handle -->
+        <div id="power-cue-handle"
+          class="absolute left-1/2 -translate-x-1/2 w-3.5 rounded-full pointer-events-none shadow-lg"
+          style="top: 8px; height: 86%; background: linear-gradient(180deg, #38BDF8 0%, #38BDF8 5%, #F8FAFC 5%, #F8FAFC 10%, #E7BC82 10%, #B47B3D 55%, #3E2110 55%, #1E1109 100%);">
         </div>
       </div>
+      <span id="power-label" class="text-[10px] font-bold text-slate-400 mt-1 tracking-wide uppercase">Pull</span>
+    </aside>
 
-      <!-- Player 2 / AI -->
-      <div id="hud-p2" class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface-950 border border-surface-800 transition">
-        <span id="hud-p2-group" class="text-[11px] px-1.5 py-0.5 rounded bg-surface-900 text-slate-400 font-medium">Open</span>
-        <span id="hud-p2-name" class="text-xs font-bold text-slate-300">AI Bot</span>
-        <span class="w-2 h-2 rounded-full bg-slate-600"></span>
+    <!-- POOL TABLE CANVAS CONTAINER -->
+    <section id="table-container" class="flex-1 min-w-0 h-full flex items-center justify-center relative">
+      <canvas id="pool-canvas" class="rounded-2xl block shadow-2xl"></canvas>
+
+      <!-- Bottom Floating Status Pill (Like 8 Ball Pool) -->
+      <div id="status-pill"
+        class="pointer-events-none absolute bottom-1.5 sm:bottom-3 left-1/2 -translate-x-1/2 px-3.5 py-1 rounded-full bg-slate-950/85 border border-slate-700/70 text-[11px] sm:text-xs font-semibold text-white whitespace-nowrap shadow-lg">
+        You are breaking, good luck!
       </div>
-    </section>
-
-    <!-- Pool Table Canvas Container -->
-    <section id="table-container" class="relative w-full bg-surface-900 border border-surface-800 rounded-2xl p-2 sm:p-3 flex items-center justify-center overflow-hidden">
-      <canvas id="pool-canvas" class="rounded-xl block w-full"></canvas>
 
       <!-- Game Over Overlay -->
-      <div id="gameover-overlay" class="hidden absolute inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-20">
-        <div class="bg-surface-900 border border-surface-700 rounded-2xl max-w-xs w-full p-5 text-center shadow-2xl">
-          <div id="gameover-badge" class="w-12 h-12 rounded-2xl bg-brand-400/15 text-brand-400 flex items-center justify-center mx-auto mb-3">
+      <div id="gameover-overlay" class="hidden absolute inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-20 rounded-2xl">
+        <div class="bg-[#121A26] border border-slate-700 rounded-2xl max-w-xs w-full p-5 text-center shadow-2xl">
+          <div class="w-12 h-12 rounded-2xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center mx-auto mb-3">
             <i data-lucide="trophy" class="w-6 h-6"></i>
           </div>
           <h2 id="gameover-title" class="text-lg font-bold text-white">You Win!</h2>
-          <p id="gameover-desc" class="text-xs text-slate-300 mt-1 mb-4">+200 Coins added to your balance.</p>
+          <p id="gameover-desc" class="text-xs text-slate-300 mt-1 mb-4">+100 Coins</p>
           <div class="flex flex-col gap-2">
-            <button id="btn-play-again" type="button" class="w-full py-2.5 rounded-xl bg-brand-400 hover:bg-brand-500 text-surface-950 font-bold text-xs cursor-pointer">
+            <button id="btn-play-again" type="button"
+              class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs cursor-pointer">
               Play Again
             </button>
-            <button id="btn-gameover-ad" type="button" class="w-full py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 font-semibold text-xs cursor-pointer">
-              Watch Ad for +500 Bonus Coins
+            <button id="btn-gameover-ad" type="button"
+              class="w-full py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 font-semibold text-xs cursor-pointer">
+              Free +500 Coins (Ad)
             </button>
           </div>
         </div>
       </div>
     </section>
-
-    <!-- Touch / Mobile Precision Controls + Pocketed Balls Tray -->
-    <section class="bg-surface-900 border border-surface-800 rounded-2xl p-3 flex flex-col md:flex-row items-center justify-between gap-3">
-      <!-- Pocketed Balls -->
-      <div class="flex items-center gap-2 w-full md:w-auto overflow-x-auto">
-        <span class="text-[11px] font-semibold text-slate-400 shrink-0">Pocketed:</span>
-        <div id="pocketed-tray" class="flex items-center gap-1 min-h-[24px]">
-          <span class="text-[11px] text-slate-600">None yet</span>
-        </div>
-      </div>
-
-      <!-- Shot Power Slider & Shoot Button (Great for Mobile) -->
-      <div class="flex items-center gap-2.5 w-full md:w-auto">
-        <label for="power-slider" class="text-[11px] font-semibold text-slate-400 shrink-0">Power</label>
-        <input id="power-slider" type="range" min="15" max="100" value="65"
-          class="flex-1 md:w-36 accent-emerald-400 cursor-pointer" />
-        <span id="power-value" class="text-xs font-mono text-brand-400 w-9 text-right">65%</span>
-        <button id="btn-shoot" type="button"
-          class="px-4 py-1.5 rounded-xl bg-brand-400 hover:bg-brand-500 disabled:opacity-40 text-surface-950 font-bold text-xs transition cursor-pointer shrink-0">
-          Shoot
-        </button>
-      </div>
-    </section>
-
-    <!-- AdMob / AdSense Banner Slot -->
-    <div id="ad-banner-slot" class="bg-surface-900/70 border border-dashed border-surface-700 rounded-xl px-4 py-2.5 flex items-center justify-between gap-3">
-      <div class="flex items-center gap-2 text-xs text-slate-400">
-        <span class="px-1.5 py-0.5 rounded bg-surface-800 text-[10px] font-mono text-slate-300">AD BANNER</span>
-        <span>320×50 AdMob Banner Slot (auto-loads on Android via Capacitor AdMob)</span>
-      </div>
-      <span class="text-[11px] text-slate-500 hidden sm:inline">Non-intrusive placement</span>
-    </div>
   </main>
 
-  <!-- ==================== PROFILE & LOGIN MODAL ==================== -->
-  <div id="profile-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-surface-900 border border-surface-700 rounded-2xl max-w-md w-full p-5 shadow-2xl max-h-[90vh] overflow-y-auto">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-sm font-bold text-white">Player Profile &amp; Account</h3>
-        <button id="btn-close-profile" type="button" class="p-1.5 rounded-lg bg-surface-800 hover:bg-surface-700 text-slate-300 cursor-pointer" aria-label="Close">
+  <!-- ==================== CUE BALL SPIN POPOVER ==================== -->
+  <div id="spin-modal" class="hidden fixed inset-0 z-40 bg-black/50 flex items-center justify-center p-4">
+    <div class="bg-[#121A26] border border-slate-700 rounded-2xl p-5 text-center shadow-2xl w-64">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-xs font-bold text-white">Cue Ball Spin</span>
+        <button id="btn-reset-spin" type="button" class="text-[11px] text-sky-400 hover:underline cursor-pointer">Center</button>
+      </div>
+      <div id="spin-pad"
+        class="relative w-36 h-36 mx-auto rounded-full bg-gradient-to-br from-white via-slate-100 to-slate-300 border-4 border-slate-600 shadow-inner cursor-crosshair">
+        <div class="absolute inset-x-0 top-1/2 h-px bg-slate-300 pointer-events-none"></div>
+        <div class="absolute inset-y-0 left-1/2 w-px bg-slate-300 pointer-events-none"></div>
+        <div id="spin-pad-dot"
+          class="absolute w-5 h-5 -ml-2.5 -mt-2.5 rounded-full bg-rose-600 border-2 border-white shadow pointer-events-none"
+          style="left: 50%; top: 50%;"></div>
+      </div>
+      <p class="text-[11px] text-slate-400 mt-3 mb-3">Tap top for follow, bottom for backspin</p>
+      <button id="btn-close-spin" type="button"
+        class="w-full py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs cursor-pointer">
+        Done
+      </button>
+    </div>
+  </div>
+
+  <!-- ==================== GAME MENU MODAL ==================== -->
+  <div id="menu-modal" class="hidden fixed inset-0 z-40 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-[#121A26] border border-slate-700 rounded-2xl max-w-xs w-full p-5 shadow-2xl space-y-3">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-bold text-white">Game Menu</h3>
+        <button id="btn-close-menu" type="button" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer" aria-label="Close">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
 
-      <!-- Profile Editor (DP Auto-Compressed to 256x256 WebP) -->
-      <div class="bg-surface-950 border border-surface-800 rounded-xl p-4 mb-4">
+      <div class="space-y-2.5 text-xs">
+        <div>
+          <label for="select-mode" class="block text-[11px] text-slate-400 mb-1">Match Mode</label>
+          <select id="select-mode"
+            class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-white cursor-pointer focus:outline-none focus:border-sky-400">
+            <option value="ai">1 vs AI Bot</option>
+            <option value="2p">2P Pass &amp; Play</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="select-stake" class="block text-[11px] text-slate-400 mb-1">Table Stake</label>
+          <select id="select-stake"
+            class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-amber-300 cursor-pointer focus:outline-none focus:border-amber-400">
+            <option value="100">100 Coins (Pot: 200)</option>
+            <option value="250">250 Coins (Pot: 500)</option>
+            <option value="500">500 Coins (Pot: 1,000)</option>
+          </select>
+        </div>
+
+        <button id="btn-new-rack" type="button"
+          class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs cursor-pointer">
+          Restart Match
+        </button>
+
+        <div class="grid grid-cols-2 gap-2">
+          <button id="btn-mute" type="button"
+            class="py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer">
+            <i id="icon-mute" data-lucide="volume-2" class="w-3.5 h-3.5"></i>
+            <span id="mute-label">Sound On</span>
+          </button>
+          <button id="btn-menu-profile" type="button"
+            class="py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-400 font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer">
+            <i data-lucide="user" class="w-3.5 h-3.5"></i>
+            Account
+          </button>
+        </div>
+
+        <button id="btn-menu-ad" type="button"
+          class="w-full py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 font-semibold text-xs cursor-pointer">
+          Get +500 Free Coins
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== PROFILE & ACCOUNT MODAL ==================== -->
+  <div id="profile-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-[#121A26] border border-slate-700 rounded-2xl max-w-sm w-full p-5 shadow-2xl max-h-[90dvh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-sm font-bold text-white">Player Profile</h3>
+        <button id="btn-close-profile" type="button" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer" aria-label="Close">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-4 mb-4">
         <div class="flex items-center gap-3.5 mb-3">
           <div class="relative shrink-0">
-            <img id="modal-avatar" alt="Player DP" class="w-16 h-16 rounded-full object-cover bg-surface-900 border-2 border-brand-400/60" />
-            <label for="input-dp-file" title="Change DP"
-              class="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-brand-400 text-surface-950 flex items-center justify-center cursor-pointer shadow">
+            <img id="modal-avatar" alt="Player DP" class="w-16 h-16 rounded-full object-cover bg-slate-900 border-2 border-sky-400/70" />
+            <label for="input-dp-file" title="Change Photo"
+              class="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center cursor-pointer shadow">
               <i data-lucide="camera" class="w-3.5 h-3.5"></i>
             </label>
             <input id="input-dp-file" type="file" accept="image/*" class="hidden" />
           </div>
           <div class="flex-1 min-w-0">
             <label for="input-username" class="block text-[11px] text-slate-400 mb-1">Display Name</label>
-            <input id="input-username" type="text" maxlength="24" placeholder="Player name"
-              class="w-full rounded-lg bg-surface-900 border border-surface-700 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-400" />
-            <p id="dp-compress-info" class="text-[10px] text-slate-500 mt-1">DP auto-compressed to 256×256 WebP (~15–25 KB)</p>
+            <input id="input-username" type="text" maxlength="24" placeholder="Your name"
+              class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-sky-400" />
           </div>
         </div>
 
         <div class="grid grid-cols-3 gap-2 text-center mb-3">
-          <div class="bg-surface-900 rounded-lg py-2 border border-surface-800">
+          <div class="bg-slate-900 rounded-lg py-2 border border-slate-800">
             <div id="stat-coins" class="text-sm font-bold text-amber-300 font-mono">1,000</div>
             <div class="text-[10px] text-slate-400">Coins</div>
           </div>
-          <div class="bg-surface-900 rounded-lg py-2 border border-surface-800">
-            <div id="stat-wins" class="text-sm font-bold text-brand-400 font-mono">0</div>
+          <div class="bg-slate-900 rounded-lg py-2 border border-slate-800">
+            <div id="stat-wins" class="text-sm font-bold text-emerald-400 font-mono">0</div>
             <div class="text-[10px] text-slate-400">Wins</div>
           </div>
-          <div class="bg-surface-900 rounded-lg py-2 border border-surface-800">
+          <div class="bg-slate-900 rounded-lg py-2 border border-slate-800">
             <div id="stat-losses" class="text-sm font-bold text-rose-400 font-mono">0</div>
             <div class="text-[10px] text-slate-400">Losses</div>
           </div>
         </div>
 
         <button id="btn-save-profile" type="button"
-          class="w-full py-2 rounded-lg bg-brand-400 hover:bg-brand-500 text-surface-950 font-semibold text-xs transition cursor-pointer">
-          Save Profile &amp; DP
+          class="w-full py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition cursor-pointer">
+          Save Profile
         </button>
       </div>
 
-      <!-- Supabase Auth Section -->
-      <div id="auth-box" class="bg-surface-950 border border-surface-800 rounded-xl p-4 space-y-3">
+      <!-- Account Sign In / Sign Up -->
+      <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-3">
         <div class="flex items-center justify-between">
-          <span class="text-xs font-semibold text-white">Cloud Sync (Supabase Auth)</span>
-          <span id="auth-status-pill" class="text-[10px] px-2 py-0.5 rounded-full bg-surface-800 text-slate-400">Not signed in</span>
+          <span class="text-xs font-semibold text-white">Account</span>
+          <span id="auth-status-pill" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">Guest</span>
         </div>
 
         <form id="pool-auth-form" class="space-y-2.5">
           <input id="auth-email" type="email" required placeholder="Email"
-            class="w-full rounded-lg bg-surface-900 border border-surface-700 px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-400" />
-          <input id="auth-password" type="password" required minlength="6" placeholder="Password (min 6 chars)"
-            class="w-full rounded-lg bg-surface-900 border border-surface-700 px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-400" />
+            class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-400" />
+          <input id="auth-password" type="password" required minlength="6" placeholder="Password"
+            class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-400" />
           <div class="flex gap-2">
-            <button id="btn-signin" type="submit" data-auth-mode="signin"
-              class="flex-1 py-2 rounded-lg bg-white hover:bg-slate-200 text-surface-950 font-semibold text-xs cursor-pointer">
+            <button id="btn-signin" type="submit"
+              class="flex-1 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-white font-bold text-xs cursor-pointer">
               Sign In
             </button>
             <button id="btn-signup" type="button"
-              class="flex-1 py-2 rounded-lg bg-surface-800 hover:bg-surface-700 text-white font-semibold text-xs cursor-pointer">
+              class="flex-1 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs cursor-pointer">
               Sign Up
             </button>
           </div>
         </form>
 
-        <button id="btn-signout" type="button" class="hidden w-full py-2 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 font-semibold text-xs cursor-pointer">
+        <button id="btn-signout" type="button"
+          class="hidden w-full py-2 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 font-semibold text-xs cursor-pointer">
           Sign Out
         </button>
       </div>
@@ -263,132 +391,44 @@
 
   <!-- ==================== REWARDED AD MODAL ==================== -->
   <div id="ad-modal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-surface-900 border border-amber-500/40 rounded-2xl max-w-sm w-full p-5 text-center shadow-2xl">
-      <div class="text-[11px] font-mono uppercase tracking-wider text-amber-400 mb-2">Rewarded Ad Preview</div>
-      <div class="bg-surface-950 border border-surface-800 rounded-xl p-6 mb-4">
-        <i data-lucide="tv" class="w-10 h-10 text-amber-400 mx-auto mb-2"></i>
-        <p class="text-xs text-slate-300">Simulating Google AdMob Rewarded Video</p>
-        <p id="ad-countdown" class="text-2xl font-bold font-mono text-white mt-2">5s</p>
+    <div class="bg-[#121A26] border border-amber-500/40 rounded-2xl max-w-xs w-full p-5 text-center shadow-2xl">
+      <div class="text-[11px] font-bold uppercase tracking-wider text-amber-400 mb-2">Free Coins</div>
+      <div class="bg-slate-950 border border-slate-800 rounded-xl p-5 mb-4">
+        <i data-lucide="gift" class="w-9 h-9 text-amber-400 mx-auto mb-2"></i>
+        <p id="ad-countdown" class="text-2xl font-bold font-mono text-white">5s</p>
       </div>
       <button id="btn-claim-ad" type="button" disabled
-        class="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed text-surface-950 font-bold text-xs cursor-pointer">
-        Wait for reward...
+        class="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-slate-950 font-bold text-xs cursor-pointer">
+        Please wait...
       </button>
     </div>
   </div>
 
-  <!-- ==================== SUPABASE SQL & KEYS MODAL ==================== -->
-  <div id="sql-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-surface-900 border border-surface-700 rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
-      <div class="px-4 py-3 border-b border-surface-800 flex items-center justify-between">
-        <h3 class="text-sm font-bold text-white">Supabase Keys &amp; 8 Ball Pool SQL</h3>
-        <button id="btn-close-sql" type="button" class="p-1.5 rounded-lg bg-surface-800 hover:bg-surface-700 text-slate-300 cursor-pointer" aria-label="Close">
-          <i data-lucide="x" class="w-4 h-4"></i>
-        </button>
-      </div>
-      <div class="p-4 overflow-y-auto space-y-4 text-xs">
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-          <div>
-            <label for="sb-url-input" class="block text-[11px] text-slate-400 mb-1">Supabase Project URL</label>
-            <input id="sb-url-input" type="url" placeholder="https://xxxx.supabase.co"
-              class="w-full rounded-lg bg-surface-950 border border-surface-700 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-400" />
-          </div>
-          <div>
-            <label for="sb-key-input" class="block text-[11px] text-slate-400 mb-1">Publishable / Anon Key</label>
-            <input id="sb-key-input" type="password" placeholder="sb_publishable_..."
-              class="w-full rounded-lg bg-surface-950 border border-surface-700 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-400" />
-          </div>
-        </div>
-        <div class="flex items-center justify-between">
-          <span class="text-[11px] text-slate-400">Or hardcode in <code class="text-brand-400">SUPABASE_CONFIG</code> inside this file.</span>
-          <button id="btn-save-sb-keys" type="button" class="px-3.5 py-1.5 rounded-lg bg-brand-400 hover:bg-brand-500 text-surface-950 font-semibold text-xs cursor-pointer">
-            Save Keys
-          </button>
-        </div>
-
-        <div>
-          <div class="flex items-center justify-between mb-1.5">
-            <span class="font-semibold text-white">Run once in Supabase SQL Editor (`profiles`, `matches`, `avatars` bucket)</span>
-            <button id="btn-copy-pool-sql" type="button" class="px-3 py-1 rounded-lg bg-surface-800 hover:bg-surface-700 text-brand-400 font-semibold text-xs cursor-pointer">
-              Copy SQL
-            </button>
-          </div>
-          <pre id="pool-sql-block" class="bg-surface-950 border border-surface-800 rounded-xl p-3 overflow-x-auto font-mono text-[11px] leading-relaxed text-emerald-300"></pre>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <!-- Toast Container -->
-  <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-xs pointer-events-none"></div>
+  <div id="toast-container" class="fixed top-16 right-3 z-50 flex flex-col gap-2 max-w-xs pointer-events-none"></div>
 
   <script>
     // =========================================================================
-    // 1. SUPABASE & ADMOB CONFIG (Fill in when deploying your game)
+    // PASTE YOUR SUPABASE PROJECT URL & PUBLISHABLE KEY HERE BEFORE DEPLOYING
     // =========================================================================
     const SUPABASE_CONFIG = {
       url: 'https://yuxcekkndtgrwgnrzobc.supabase.co',
       anonKey: 'sb_publishable_wGY8hWn3rkUkThnpU0vyBg_Bv48pJRI'
     };
+
     const STORAGE_KEY_SB = 'pool8_sb_cfg_v1';
     const STORAGE_KEY_PROFILE = 'pool8_local_profile_v1';
 
-    const POOL_SETUP_SQL = `-- 1. Player profiles (username, compressed DP URL, coins, wins/losses)
-create table if not exists public.profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
-  username text not null default 'Player',
-  avatar_url text,
-  coins integer not null default 1000,
-  wins integer not null default 0,
-  losses integer not null default 0,
-  updated_at timestamptz not null default now()
-);
-
--- 2. Match history table
-create table if not exists public.matches (
-  id uuid primary key default gen_random_uuid(),
-  player_id uuid not null references auth.users(id) on delete cascade,
-  mode text not null default 'ai',
-  stake integer not null default 100,
-  result text not null check (result in ('win', 'loss')),
-  created_at timestamptz not null default now()
-);
-
--- 3. Permissions & Row Level Security
-grant select, insert, update on public.profiles to authenticated;
-grant select, insert on public.matches to authenticated;
-
-alter table public.profiles enable row level security;
-alter table public.matches enable row level security;
-
-create policy "Anyone can view profiles" on public.profiles for select using (true);
-create policy "Users manage own profile" on public.profiles for insert with check (auth.uid() = id);
-create policy "Users update own profile" on public.profiles for update using (auth.uid() = id);
-
-create policy "Users view own matches" on public.matches for select using (auth.uid() = player_id);
-create policy "Users insert own matches" on public.matches for insert with check (auth.uid() = player_id);
-
--- 4. Public 'avatars' bucket (max 500 KB per DP; client compresses to ~20 KB WebP)
-insert into storage.buckets (id, name, public, file_size_limit)
-values ('avatars', 'avatars', true, 512000)
-on conflict (id) do nothing;
-
-create policy "Public read avatars" on storage.objects for select using (bucket_id = 'avatars');
-create policy "Users upload own avatar" on storage.objects for insert to authenticated
-  with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
-create policy "Users update own avatar" on storage.objects for update to authenticated
-  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);`;
-
     const DEFAULT_AVATAR_SVG = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`
       <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-        <rect width="128" height="128" rx="64" fill="#1B2432"/>
-        <circle cx="64" cy="48" r="22" fill="#3ECF8E"/>
-        <path d="M26 112c6-22 22-34 38-34s32 12 38 34" fill="#3ECF8E"/>
+        <rect width="128" height="128" fill="#1E293B"/>
+        <circle cx="64" cy="48" r="22" fill="#38BDF8"/>
+        <path d="M24 114c6-23 22-36 40-36s34 13 40 36" fill="#38BDF8"/>
       </svg>
     `);
 
     // =========================================================================
-    // 2. SOUND SYNTHESIS (Web Audio API — zero external sound files)
+    // SOUND ENGINE (Web Audio API)
     // =========================================================================
     const sound = {
       ctx: null,
@@ -408,14 +448,14 @@ create policy "Users update own avatar" on storage.objects for update to authent
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(freq + intensity * 240, now);
-        osc.frequency.exponentialRampToValueAtTime(110, now + 0.055);
+        osc.frequency.setValueAtTime(freq + intensity * 260, now);
+        osc.frequency.exponentialRampToValueAtTime(110, now + 0.05);
         gain.gain.setValueAtTime(Math.min(0.32, 0.06 + intensity * 0.24), now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.055);
         osc.connect(gain);
         gain.connect(this.ctx.destination);
         osc.start(now);
-        osc.stop(now + 0.065);
+        osc.stop(now + 0.06);
       },
       playPocket() {
         if (this.muted || !this.ctx) return;
@@ -423,9 +463,9 @@ create policy "Users update own avatar" on storage.objects for update to authent
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(220, now);
-        osc.frequency.exponentialRampToValueAtTime(75, now + 0.16);
-        gain.gain.setValueAtTime(0.22, now);
+        osc.frequency.setValueAtTime(210, now);
+        osc.frequency.exponentialRampToValueAtTime(70, now + 0.16);
+        gain.gain.setValueAtTime(0.24, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
         osc.connect(gain);
         gain.connect(this.ctx.destination);
@@ -441,23 +481,23 @@ create policy "Users update own avatar" on storage.objects for update to authent
           osc.type = 'sine';
           osc.frequency.setValueAtTime(f, now);
           gain.gain.setValueAtTime(0.14, now);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
           osc.connect(gain);
           gain.connect(this.ctx.destination);
           osc.start(now);
-          osc.stop(now + 0.26);
+          osc.stop(now + 0.25);
         });
       }
     };
 
     // =========================================================================
-    // 3. PROFILE, SUPABASE & CLIENT-SIDE DP COMPRESSOR
+    // PROFILE & SUPABASE SYNC
     // =========================================================================
     const app = {
       sb: null,
       user: null,
       profile: {
-        username: 'Guest Player',
+        username: 'Guest',
         avatar_url: DEFAULT_AVATAR_SVG,
         coins: 1000,
         wins: 0,
@@ -465,21 +505,22 @@ create policy "Users update own avatar" on storage.objects for update to authent
       },
       pendingDpBlob: null,
       pendingDpPreview: null,
-      adTimer: null
+      adTimer: null,
+      dismissedRotate: false
     };
 
     function showToast(msg, variant = 'info') {
       const c = document.getElementById('toast-container');
       const el = document.createElement('div');
       const cls = variant === 'success'
-        ? 'border-brand-400/50 text-emerald-200'
+        ? 'border-emerald-500/50 text-emerald-200'
         : variant === 'error'
           ? 'border-rose-500/50 text-rose-200'
-          : 'border-surface-700 text-slate-200';
-      el.className = `pointer-events-auto bg-surface-900 border ${cls} rounded-xl px-3.5 py-2 text-xs font-medium shadow-xl transition`;
+          : 'border-slate-700 text-slate-200';
+      el.className = `pointer-events-auto bg-[#121A26] border ${cls} rounded-xl px-3.5 py-2 text-xs font-medium shadow-xl transition`;
       el.textContent = msg;
       c.appendChild(el);
-      setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 220); }, 2600);
+      setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 220); }, 2500);
     }
 
     function loadLocalProfile() {
@@ -490,44 +531,37 @@ create policy "Users update own avatar" on storage.objects for update to authent
     }
 
     function saveLocalProfile() {
-      try {
-        localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(app.profile));
-      } catch (_) {}
+      try { localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(app.profile)); } catch (_) {}
     }
 
     function renderProfileUI() {
       const avatar = app.profile.avatar_url || DEFAULT_AVATAR_SVG;
       document.getElementById('nav-avatar').src = avatar;
       document.getElementById('modal-avatar').src = app.pendingDpPreview || avatar;
-      document.getElementById('nav-username').textContent = app.profile.username || 'Player';
-      document.getElementById('hud-p1-name').textContent = app.profile.username || 'You';
+      document.getElementById('hud-p1-name').textContent = app.profile.username || 'Guest';
       document.getElementById('nav-coins').textContent = Number(app.profile.coins || 0).toLocaleString();
       document.getElementById('stat-coins').textContent = Number(app.profile.coins || 0).toLocaleString();
       document.getElementById('stat-wins').textContent = app.profile.wins || 0;
       document.getElementById('stat-losses').textContent = app.profile.losses || 0;
       document.getElementById('input-username').value = app.profile.username || '';
 
-      const tag = document.getElementById('nav-auth-tag');
       const pill = document.getElementById('auth-status-pill');
       const form = document.getElementById('pool-auth-form');
       const signout = document.getElementById('btn-signout');
 
       if (app.user) {
-        tag.textContent = 'Supabase Synced';
         pill.textContent = app.user.email;
-        pill.className = 'text-[10px] px-2 py-0.5 rounded-full bg-brand-400/15 text-brand-400';
+        pill.className = 'text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400';
         form.classList.add('hidden');
         signout.classList.remove('hidden');
       } else {
-        tag.textContent = 'Local Mode';
-        pill.textContent = 'Not signed in';
-        pill.className = 'text-[10px] px-2 py-0.5 rounded-full bg-surface-800 text-slate-400';
+        pill.textContent = 'Guest';
+        pill.className = 'text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400';
         form.classList.remove('hidden');
         signout.classList.add('hidden');
       }
     }
 
-    // Compress any selected DP image to 256x256 WebP (~15-25 KB) so 1 GB holds ~50,000 DPs
     function compressAvatarImage(file) {
       return new Promise((resolve, reject) => {
         const img = new Image();
@@ -538,15 +572,12 @@ create policy "Users update own avatar" on storage.objects for update to authent
           const c = document.createElement('canvas');
           c.width = size;
           c.height = size;
-          const ctx = c.getContext('2d');
+          const cctx = c.getContext('2d');
           const minSide = Math.min(img.width, img.height);
-          const sx = (img.width - minSide) / 2;
-          const sy = (img.height - minSide) / 2;
-          ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
+          cctx.drawImage(img, (img.width - minSide) / 2, (img.height - minSide) / 2, minSide, minSide, 0, 0, size, size);
           c.toBlob((blob) => {
             if (!blob) return reject(new Error('Compression failed'));
-            const dataUrl = c.toDataURL('image/webp', 0.8);
-            resolve({ blob, dataUrl });
+            resolve({ blob, dataUrl: c.toDataURL('image/webp', 0.8) });
           }, 'image/webp', 0.8);
         };
         img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Invalid image')); };
@@ -554,7 +585,7 @@ create policy "Users update own avatar" on storage.objects for update to authent
       });
     }
 
-    function initSupabase() {
+    async function initSupabase() {
       let cfg = { ...SUPABASE_CONFIG };
       if (!cfg.url || !cfg.anonKey) {
         try {
@@ -562,16 +593,21 @@ create policy "Users update own avatar" on storage.objects for update to authent
           if (saved.url && saved.anonKey) cfg = saved;
         } catch (_) {}
       }
-      document.getElementById('sb-url-input').value = cfg.url || '';
-      document.getElementById('sb-key-input').value = cfg.anonKey || '';
-
       if (cfg.url && cfg.anonKey && window.supabase) {
         try {
           app.sb = window.supabase.createClient(cfg.url.trim(), cfg.anonKey.trim());
+          const { data } = await app.sb.auth.getSession();
+          if (data && data.session && data.session.user) {
+            app.user = data.session.user;
+            await syncProfileFromCloud();
+            return;
+          }
         } catch (_) {
           app.sb = null;
         }
       }
+      // Show welcome overlay if not signed in yet
+      document.getElementById('welcome-overlay').classList.remove('hidden');
     }
 
     async function syncProfileFromCloud() {
@@ -642,24 +678,24 @@ create policy "Users update own avatar" on storage.objects for update to authent
     }
 
     // =========================================================================
-    // 4. 8 BALL POOL ENGINE (Logical 900x450 Table, Responsive Canvas)
+    // 8 BALL POOL ENGINE (Miniclip-Style Aim + Left Pull-Bar + Spin)
     // =========================================================================
-    const TABLE_W = 900;
-    const TABLE_H = 450;
-    const RAIL = 40;
-    const BALL_R = 12.5;
-    const POCKET_R = 23;
-    const FRICTION = 0.986;
+    const TABLE_W = 920;
+    const TABLE_H = 460;
+    const RAIL = 42;
+    const BALL_R = 12.8;
+    const POCKET_R = 23.5;
+    const FRICTION = 0.9865;
     const MIN_SPEED = 0.08;
-    const MAX_SHOT_SPEED = 24;
+    const MAX_SHOT_SPEED = 25;
 
     const POCKETS = [
-      { x: RAIL + 4, y: RAIL + 4 },
-      { x: TABLE_W / 2, y: RAIL - 2 },
-      { x: TABLE_W - RAIL - 4, y: RAIL + 4 },
-      { x: RAIL + 4, y: TABLE_H - RAIL - 4 },
-      { x: TABLE_W / 2, y: TABLE_H - RAIL + 2 },
-      { x: TABLE_W - RAIL - 4, y: TABLE_H - RAIL - 4 }
+      { x: RAIL + 3, y: RAIL + 3 },
+      { x: TABLE_W / 2, y: RAIL - 3 },
+      { x: TABLE_W - RAIL - 3, y: RAIL + 3 },
+      { x: RAIL + 3, y: TABLE_H - RAIL - 3 },
+      { x: TABLE_W / 2, y: TABLE_H - RAIL + 3 },
+      { x: TABLE_W - RAIL - 3, y: TABLE_H - RAIL - 3 }
     ];
 
     const BALL_COLORS = {
@@ -674,17 +710,19 @@ create policy "Users update own avatar" on storage.objects for update to authent
     const ctx = canvas.getContext('2d');
 
     const game = {
-      mode: 'ai', // 'ai' | '2p'
+      mode: 'ai',
       stake: 100,
       balls: [],
-      pocketed: [],
-      turn: 1, // 1 = Player 1, 2 = Player 2 / AI
-      groups: { 1: null, 2: null }, // 'solids' | 'stripes' | null
+      turn: 1,
+      groups: { 1: null, 2: null },
       phase: 'aim', // 'aim' | 'moving' | 'ballInHand' | 'aiThinking' | 'gameover'
       aimAngle: 0,
-      power: 0.65,
-      dragging: false,
-      dragStart: null,
+      chargePower: 0, // 0..1 while pulling vertical bar
+      isCharging: false,
+      isAiming: false,
+      spinX: 0, // -1..1
+      spinY: 0, // -1 (topspin) .. +1 (backspin)
+      cueHitObjectThisTurn: false,
       turnPocketed: [],
       scratched: false,
       rafId: null,
@@ -701,21 +739,26 @@ create policy "Users update own avatar" on storage.objects for update to authent
     function setupRack() {
       if (game.aiTimer) { clearTimeout(game.aiTimer); game.aiTimer = null; }
       game.balls = [];
-      game.pocketed = [];
       game.turn = 1;
       game.groups = { 1: null, 2: null };
       game.phase = 'aim';
       game.aimAngle = 0;
-      game.dragging = false;
+      game.chargePower = 0;
+      game.isCharging = false;
+      game.isAiming = false;
+      game.spinX = 0;
+      game.spinY = 0;
       game.turnPocketed = [];
       game.scratched = false;
+      updateSpinUI();
+      updatePowerBarUI(0);
 
       document.getElementById('gameover-overlay').classList.add('hidden');
+      document.getElementById('hud-pot').textContent = (game.stake * 2).toLocaleString();
 
       // Cue ball
       game.balls.push({ num: 0, x: TABLE_W * 0.25, y: TABLE_H / 2, vx: 0, vy: 0, active: true });
 
-      // Standard 15-ball rack order (8-ball in center, solid & stripe in back corners)
       const order = [1, 9, 2, 10, 8, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15];
       const startX = TABLE_W * 0.7;
       const startY = TABLE_H / 2;
@@ -725,9 +768,8 @@ create policy "Users update own avatar" on storage.objects for update to authent
 
       for (let row = 0; row < 5; row++) {
         for (let col = 0; col <= row; col++) {
-          const num = order[idx++];
           game.balls.push({
-            num,
+            num: order[idx++],
             x: startX + row * dx,
             y: startY + (col - row / 2) * dy,
             vx: 0,
@@ -737,78 +779,93 @@ create policy "Users update own avatar" on storage.objects for update to authent
         }
       }
 
-      updateHUD();
-      renderPocketedTray();
+      updateHUD('You are breaking, good luck!');
     }
 
-    function getCueBall() {
-      return game.balls[0];
-    }
+    function getCueBall() { return game.balls[0]; }
 
-    function updateHUD(customMsg) {
-      const p1 = document.getElementById('hud-p1');
-      const p2 = document.getElementById('hud-p2');
-      document.getElementById('hud-p2-name').textContent = game.mode === 'ai' ? 'AI Bot' : 'Player 2';
-
-      const g1 = game.groups[1] ? (game.groups[1] === 'solids' ? 'Solids (1–7)' : 'Stripes (9–15)') : 'Open';
-      const g2 = game.groups[2] ? (game.groups[2] === 'solids' ? 'Solids (1–7)' : 'Stripes (9–15)') : 'Open';
-      document.getElementById('hud-p1-group').textContent = g1;
-      document.getElementById('hud-p2-group').textContent = g2;
-
-      const p1Active = game.turn === 1;
-      p1.className = p1Active
-        ? 'flex items-center gap-2 px-3 py-1.5 rounded-xl bg-brand-400/15 border border-brand-400/50 transition'
-        : 'flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface-950 border border-surface-800 transition';
-      p2.className = !p1Active
-        ? 'flex items-center gap-2 px-3 py-1.5 rounded-xl bg-sky-500/15 border border-sky-400/50 transition'
-        : 'flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface-950 border border-surface-800 transition';
-
-      const status = document.getElementById('game-status');
-      if (customMsg) {
-        status.textContent = customMsg;
-      } else if (game.phase === 'ballInHand') {
-        status.textContent = `${game.turn === 1 ? 'Your' : (game.mode === 'ai' ? 'AI' : 'Player 2')} Ball-in-Hand — Tap table to place cue ball`;
-      } else if (game.phase === 'aiThinking') {
-        status.textContent = 'AI Bot is lining up a shot...';
-      } else if (game.phase === 'moving') {
-        status.textContent = 'Balls in motion...';
-      } else {
-        const who = game.turn === 1 ? 'Your Turn' : (game.mode === 'ai' ? 'AI Turn' : 'Player 2 Turn');
-        status.textContent = `${who} — Aim & drag back (or tap Shoot)`;
-      }
-
-      document.getElementById('btn-shoot').disabled = !(game.phase === 'aim' && (game.turn === 1 || game.mode === '2p'));
-    }
-
-    function renderPocketedTray() {
-      const tray = document.getElementById('pocketed-tray');
-      if (game.pocketed.length === 0) {
-        tray.innerHTML = '<span class="text-[11px] text-slate-600">None yet</span>';
+    function renderBallSlots(containerId, group) {
+      const el = document.getElementById(containerId);
+      if (!group) {
+        el.innerHTML = Array.from({ length: 7 }, () =>
+          `<span class="w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full bg-slate-950/90 border border-slate-700/80 inline-block"></span>`
+        ).join('');
         return;
       }
-      tray.innerHTML = game.pocketed.map(num => {
-        const color = BALL_COLORS[num];
-        const isStripe = num >= 9;
-        return `
-          <span class="w-5 h-5 rounded-full text-[9px] font-bold flex items-center justify-center shrink-0 border border-white/20"
-            style="background:${isStripe ? `linear-gradient(180deg,#fff 22%,${color} 22%,${color} 78%,#fff 78%)` : color};color:${num === 1 || num === 9 ? '#111' : '#fff'}">
-            ${num}
-          </span>
-        `;
+      const nums = group === 'solids' ? [1, 2, 3, 4, 5, 6, 7] : [9, 10, 11, 12, 13, 14, 15];
+      el.innerHTML = nums.map(n => {
+        const b = game.balls.find(x => x.num === n);
+        const alive = b && b.active;
+        const c = BALL_COLORS[n];
+        const stripeBg = `linear-gradient(180deg,#fff 22%,${c} 22%,${c} 78%,#fff 78%)`;
+        if (!alive) {
+          return `<span class="w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full bg-slate-950/70 border border-slate-800 inline-block opacity-40"></span>`;
+        }
+        return `<span class="w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full inline-block border border-white/30 shadow-sm" style="background:${n >= 9 ? stripeBg : c}"></span>`;
       }).join('');
+    }
+
+    function updateHUD(statusText) {
+      document.getElementById('hud-p2-name').textContent = game.mode === 'ai' ? 'AI Bot' : 'Player 2';
+      renderBallSlots('p1-slots', game.groups[1]);
+      renderBallSlots('p2-slots', game.groups[2]);
+
+      const p1Av = document.getElementById('btn-open-profile');
+      const p2Av = document.getElementById('p2-avatar-wrap');
+      if (game.turn === 1) {
+        p1Av.classList.add('avatar-active'); p1Av.classList.remove('avatar-idle');
+        p2Av.classList.add('avatar-idle'); p2Av.classList.remove('avatar-active');
+      } else {
+        p2Av.classList.add('avatar-active'); p2Av.classList.remove('avatar-idle');
+        p1Av.classList.add('avatar-idle'); p1Av.classList.remove('avatar-active');
+      }
+
+      const pill = document.getElementById('status-pill');
+      if (statusText) {
+        pill.textContent = statusText;
+      } else if (game.phase === 'ballInHand') {
+        pill.textContent = 'Ball in hand — tap table to place cue ball';
+      } else if (game.phase === 'aiThinking') {
+        pill.textContent = 'AI Bot is aiming...';
+      } else if (game.phase === 'moving') {
+        pill.textContent = 'Shot in progress...';
+      } else {
+        pill.textContent = game.turn === 1
+          ? 'Aim on table • Pull left cue bar to shoot'
+          : (game.mode === 'ai' ? 'AI Bot Turn' : 'Player 2 — Aim & pull left cue bar');
+      }
+    }
+
+    function updatePowerBarUI(powerNorm) {
+      const pct = Math.max(0, Math.min(1, powerNorm));
+      document.getElementById('power-fill').style.height = `${pct * 100}%`;
+      document.getElementById('power-cue-handle').style.top = `${8 + pct * 58}%`;
+      document.getElementById('power-label').textContent = pct > 0.05 ? `${Math.round(pct * 100)}%` : 'Pull';
+    }
+
+    function updateSpinUI() {
+      const dot = document.getElementById('spin-dot-indicator');
+      dot.style.transform = `translate(${game.spinX * 8}px, ${game.spinY * 8}px)`;
+      const padDot = document.getElementById('spin-pad-dot');
+      padDot.style.left = `${50 + game.spinX * 36}%`;
+      padDot.style.top = `${50 + game.spinY * 36}%`;
     }
 
     function shootCueBall(angle, powerNorm) {
       const cue = getCueBall();
       if (!cue || !cue.active) return;
       sound.unlock();
-      const speed = Math.max(3, Math.min(1, powerNorm) * MAX_SHOT_SPEED);
+      const speed = Math.max(3.2, Math.min(1, powerNorm) * MAX_SHOT_SPEED);
       cue.vx = Math.cos(angle) * speed;
       cue.vy = Math.sin(angle) * speed;
       game.turnPocketed = [];
       game.scratched = false;
+      game.cueHitObjectThisTurn = false;
+      game.chargePower = 0;
+      game.isCharging = false;
+      updatePowerBarUI(0);
       game.phase = 'moving';
-      sound.playHit(powerNorm, 420);
+      sound.playHit(powerNorm, 430);
       updateHUD();
     }
 
@@ -818,29 +875,28 @@ create policy "Users update own avatar" on storage.objects for update to authent
 
     function triggerGameOver(winnerPlayer, reason) {
       game.phase = 'gameover';
-      const isPlayer1Win = winnerPlayer === 1;
-      const overlay = document.getElementById('gameover-overlay');
+      const isP1Win = winnerPlayer === 1;
       const title = document.getElementById('gameover-title');
       const desc = document.getElementById('gameover-desc');
 
       if (game.mode === 'ai') {
-        if (isPlayer1Win) {
+        if (isP1Win) {
           sound.playWin();
           title.textContent = 'You Win!';
-          desc.textContent = `${reason} • +${game.stake} Coins earned.`;
+          desc.textContent = `${reason} • +${game.stake} Coins`;
           recordMatchResult('win', game.stake);
         } else {
           title.textContent = 'AI Bot Wins';
-          desc.textContent = `${reason} • -${game.stake} Coins.`;
+          desc.textContent = `${reason} • -${game.stake} Coins`;
           recordMatchResult('loss', game.stake);
         }
       } else {
         sound.playWin();
-        title.textContent = isPlayer1Win ? `${app.profile.username} Wins!` : 'Player 2 Wins!';
+        title.textContent = isP1Win ? `${app.profile.username} Wins!` : 'Player 2 Wins!';
         desc.textContent = reason;
       }
 
-      overlay.classList.remove('hidden');
+      document.getElementById('gameover-overlay').classList.remove('hidden');
       updateHUD(title.textContent);
       if (window.lucide) window.lucide.createIcons();
     }
@@ -851,18 +907,21 @@ create policy "Users update own avatar" on storage.objects for update to authent
       const myGroup = game.groups[current];
       const pocketedEight = game.turnPocketed.includes(8);
 
-      // 8-ball pocketed check
+      // Reset spin after each shot
+      game.spinX = 0;
+      game.spinY = 0;
+      updateSpinUI();
+
       if (pocketedEight) {
         const clearedOwn = myGroup && remainingInGroup(myGroup) === 0;
         if (clearedOwn && !game.scratched) {
-          triggerGameOver(current, 'Clean 8-ball finish!');
+          triggerGameOver(current, 'Clean 8-ball victory!');
         } else {
-          triggerGameOver(opponent, game.scratched ? 'Scratched on the 8-ball!' : '8-ball pocketed too early!');
+          triggerGameOver(opponent, game.scratched ? 'Scratched on the 8-ball' : '8-ball pocketed early');
         }
         return;
       }
 
-      // Assign solids/stripes on first legal non-8 ball pocketed
       let pocketedOwn = false;
       const objectBalls = game.turnPocketed.filter(n => n !== 0 && n !== 8);
       if (!myGroup && objectBalls.length > 0 && !game.scratched) {
@@ -874,7 +933,6 @@ create policy "Users update own avatar" on storage.objects for update to authent
         pocketedOwn = objectBalls.some(n => ballGroup(n) === myGroup);
       }
 
-      // Scratch handling
       if (game.scratched) {
         const cue = getCueBall();
         cue.active = true;
@@ -885,7 +943,7 @@ create policy "Users update own avatar" on storage.objects for update to authent
         game.turn = opponent;
         if (game.mode === 'ai' && game.turn === 2) {
           game.phase = 'aiThinking';
-          updateHUD('Foul! AI gets Ball-in-Hand');
+          updateHUD('Foul! AI gets ball in hand');
           scheduleAIShot();
         } else {
           game.phase = 'ballInHand';
@@ -894,10 +952,7 @@ create policy "Users update own avatar" on storage.objects for update to authent
         return;
       }
 
-      // Keep turn if pocketed own ball, else switch
-      if (!pocketedOwn) {
-        game.turn = opponent;
-      }
+      if (!pocketedOwn) game.turn = opponent;
 
       if (game.mode === 'ai' && game.turn === 2) {
         game.phase = 'aiThinking';
@@ -915,33 +970,21 @@ create policy "Users update own avatar" on storage.objects for update to authent
         if (game.phase !== 'aiThinking') return;
         const cue = getCueBall();
         const aiGroup = game.groups[2];
-
-        // Choose valid target balls
         let targets = game.balls.filter(b => b.active && b.num !== 0 && b.num !== 8);
         if (aiGroup) {
           const own = targets.filter(b => ballGroup(b.num) === aiGroup);
           targets = own.length > 0 ? own : game.balls.filter(b => b.active && b.num === 8);
         }
+        if (targets.length === 0) { game.phase = 'aim'; return; }
 
-        if (targets.length === 0) {
-          game.phase = 'aim';
-          return;
-        }
-
-        // Pick best ball + pocket alignment
-        let bestAngle = 0;
-        let bestScore = -Infinity;
-        let bestDist = 300;
-
+        let bestAngle = 0, bestScore = -Infinity, bestDist = 300;
         for (const t of targets) {
           for (const p of POCKETS) {
-            const dxTP = p.x - t.x;
-            const dyTP = p.y - t.y;
+            const dxTP = p.x - t.x, dyTP = p.y - t.y;
             const distTP = Math.hypot(dxTP, dyTP);
-            const ghostX = t.x - (dxTP / distTP) * (BALL_R * 2);
-            const ghostY = t.y - (dyTP / distTP) * (BALL_R * 2);
-            const dxCG = ghostX - cue.x;
-            const dyCG = ghostY - cue.y;
+            const gx = t.x - (dxTP / distTP) * (BALL_R * 2);
+            const gy = t.y - (dyTP / distTP) * (BALL_R * 2);
+            const dxCG = gx - cue.x, dyCG = gy - cue.y;
             const distCG = Math.hypot(dxCG, dyCG);
             const dot = (dxCG / distCG) * (dxTP / distTP) + (dyCG / distCG) * (dyTP / distTP);
             if (dot > 0.25) {
@@ -954,13 +997,9 @@ create policy "Users update own avatar" on storage.objects for update to authent
             }
           }
         }
-
         if (bestScore === -Infinity) {
-          const t = targets[0];
-          bestAngle = Math.atan2(t.y - cue.y, t.x - cue.x);
+          bestAngle = Math.atan2(targets[0].y - cue.y, targets[0].x - cue.x);
         }
-
-        // Slight human-like inaccuracy so player can beat AI
         const jitter = (Math.random() - 0.5) * 0.045;
         const aiPower = Math.min(0.88, Math.max(0.42, bestDist / 680));
         game.aimAngle = bestAngle + jitter;
@@ -970,7 +1009,6 @@ create policy "Users update own avatar" on storage.objects for update to authent
 
     function stepPhysics() {
       if (game.phase !== 'moving') return;
-
       const substeps = 4;
       let anyMoving = false;
 
@@ -980,7 +1018,6 @@ create policy "Users update own avatar" on storage.objects for update to authent
           b.x += b.vx / substeps;
           b.y += b.vy / substeps;
 
-          // Pocket check
           let inPocket = false;
           for (const p of POCKETS) {
             if (Math.hypot(b.x - p.x, b.y - p.y) < POCKET_R) {
@@ -993,68 +1030,66 @@ create policy "Users update own avatar" on storage.objects for update to authent
                 game.scratched = true;
               } else {
                 game.turnPocketed.push(b.num);
-                if (!game.pocketed.includes(b.num)) {
-                  game.pocketed.push(b.num);
-                  renderPocketedTray();
-                }
+                renderBallSlots('p1-slots', game.groups[1]);
+                renderBallSlots('p2-slots', game.groups[2]);
               }
               break;
             }
           }
           if (inPocket) continue;
 
-          // Cushion bounce
           if (b.x - BALL_R < RAIL) {
             b.x = RAIL + BALL_R;
-            b.vx = Math.abs(b.vx) * 0.84;
+            b.vx = Math.abs(b.vx) * 0.85;
             sound.playHit(Math.hypot(b.vx, b.vy) / 22, 260);
           } else if (b.x + BALL_R > TABLE_W - RAIL) {
             b.x = TABLE_W - RAIL - BALL_R;
-            b.vx = -Math.abs(b.vx) * 0.84;
+            b.vx = -Math.abs(b.vx) * 0.85;
             sound.playHit(Math.hypot(b.vx, b.vy) / 22, 260);
           }
-
           if (b.y - BALL_R < RAIL) {
             b.y = RAIL + BALL_R;
-            b.vy = Math.abs(b.vy) * 0.84;
+            b.vy = Math.abs(b.vy) * 0.85;
             sound.playHit(Math.hypot(b.vx, b.vy) / 22, 260);
           } else if (b.y + BALL_R > TABLE_H - RAIL) {
             b.y = TABLE_H - RAIL - BALL_R;
-            b.vy = -Math.abs(b.vy) * 0.84;
+            b.vy = -Math.abs(b.vy) * 0.85;
             sound.playHit(Math.hypot(b.vx, b.vy) / 22, 260);
           }
         }
 
-        // Ball-to-ball collisions
         for (let i = 0; i < game.balls.length; i++) {
           const a = game.balls[i];
           if (!a.active) continue;
           for (let j = i + 1; j < game.balls.length; j++) {
             const b = game.balls[j];
             if (!b.active) continue;
-            const dx = b.x - a.x;
-            const dy = b.y - a.y;
+            const dx = b.x - a.x, dy = b.y - a.y;
             const dist = Math.hypot(dx, dy);
             const minDist = BALL_R * 2;
             if (dist > 0 && dist < minDist) {
-              const nx = dx / dist;
-              const ny = dy / dist;
+              const nx = dx / dist, ny = dy / dist;
               const overlap = (minDist - dist) * 0.505;
-              a.x -= nx * overlap;
-              a.y -= ny * overlap;
-              b.x += nx * overlap;
-              b.y += ny * overlap;
+              a.x -= nx * overlap; a.y -= ny * overlap;
+              b.x += nx * overlap; b.y += ny * overlap;
 
-              const dvx = a.vx - b.vx;
-              const dvy = a.vy - b.vy;
+              const dvx = a.vx - b.vx, dvy = a.vy - b.vy;
               const rel = dvx * nx + dvy * ny;
               if (rel > 0) {
                 const impulse = rel * 0.96;
-                a.vx -= impulse * nx;
-                a.vy -= impulse * ny;
-                b.vx += impulse * nx;
-                b.vy += impulse * ny;
-                if (impulse > 0.6) sound.playHit(Math.min(1, impulse / 16), 620);
+                a.vx -= impulse * nx; a.vy -= impulse * ny;
+                b.vx += impulse * nx; b.vy += impulse * ny;
+
+                // Apply follow / backspin on first cue-ball object collision
+                if (!game.cueHitObjectThisTurn && (a.num === 0 || b.num === 0)) {
+                  game.cueHitObjectThisTurn = true;
+                  const cue = a.num === 0 ? a : b;
+                  const sign = a.num === 0 ? 1 : -1;
+                  const followMag = -game.spinY * impulse * 0.38;
+                  cue.vx += nx * sign * followMag;
+                  cue.vy += ny * sign * followMag;
+                }
+                if (impulse > 0.6) sound.playHit(Math.min(1, impulse / 16), 640);
               }
             }
           }
@@ -1066,72 +1101,100 @@ create policy "Users update own avatar" on storage.objects for update to authent
         b.vx *= FRICTION;
         b.vy *= FRICTION;
         if (Math.hypot(b.vx, b.vy) < MIN_SPEED) {
-          b.vx = 0;
-          b.vy = 0;
+          b.vx = 0; b.vy = 0;
         } else {
           anyMoving = true;
         }
       }
-
-      if (!anyMoving) {
-        resolveTurn();
-      }
+      if (!anyMoving) resolveTurn();
     }
 
     function drawTable() {
       ctx.clearRect(0, 0, TABLE_W, TABLE_H);
 
-      // Outer wooden frame
-      const wood = ctx.createLinearGradient(0, 0, TABLE_W, TABLE_H);
-      wood.addColorStop(0, '#4A2C18');
-      wood.addColorStop(0.5, '#6B3E22');
-      wood.addColorStop(1, '#3B2111');
+      // Mahogany Wooden Frame (Miniclip 8 Ball Pool style)
+      const wood = ctx.createLinearGradient(0, 0, 0, TABLE_H);
+      wood.addColorStop(0, '#7C2323');
+      wood.addColorStop(0.5, '#591616');
+      wood.addColorStop(1, '#3B0D0D');
       ctx.fillStyle = wood;
       ctx.beginPath();
-      ctx.roundRect(0, 0, TABLE_W, TABLE_H, 24);
+      ctx.roundRect(0, 0, TABLE_W, TABLE_H, 26);
       ctx.fill();
 
-      // Inner felt surface
-      const felt = ctx.createRadialGradient(TABLE_W / 2, TABLE_H / 2, 40, TABLE_W / 2, TABLE_H / 2, 520);
-      felt.addColorStop(0, '#15803D');
-      felt.addColorStop(1, '#0F5C2C');
+      // Metallic corner brackets
+      ctx.fillStyle = '#CBD5E1';
+      [[0, 0], [TABLE_W - 44, 0], [0, TABLE_H - 44], [TABLE_W - 44, TABLE_H - 44]].forEach(([cx, cy]) => {
+        ctx.beginPath();
+        ctx.roundRect(cx, cy, 44, 44, 18);
+        ctx.fill();
+      });
+
+      // Re-inset inner wood rail border
+      ctx.fillStyle = '#6B1D1D';
+      ctx.beginPath();
+      ctx.roundRect(10, 10, TABLE_W - 20, TABLE_H - 20, 18);
+      ctx.fill();
+
+      // Inner cushion lip
+      ctx.fillStyle = '#0D4A66';
+      ctx.beginPath();
+      ctx.roundRect(RAIL - 7, RAIL - 7, TABLE_W - (RAIL - 7) * 2, TABLE_H - (RAIL - 7) * 2, 12);
+      ctx.fill();
+
+      // Classic Tournament Blue Felt
+      const felt = ctx.createRadialGradient(TABLE_W / 2, TABLE_H / 2, 30, TABLE_W / 2, TABLE_H / 2, 540);
+      felt.addColorStop(0, '#2297C4');
+      felt.addColorStop(0.65, '#1979A1');
+      felt.addColorStop(1, '#115A7C');
       ctx.fillStyle = felt;
       ctx.beginPath();
-      ctx.roundRect(RAIL, RAIL, TABLE_W - RAIL * 2, TABLE_H - RAIL * 2, 10);
+      ctx.roundRect(RAIL, RAIL, TABLE_W - RAIL * 2, TABLE_H - RAIL * 2, 8);
       ctx.fill();
 
+      // Diamond rail sights
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      for (let i = 1; i <= 3; i++) {
+        const x1 = RAIL + (TABLE_W / 2 - RAIL) * (i / 4);
+        const x2 = TABLE_W / 2 + (TABLE_W / 2 - RAIL) * (i / 4);
+        [x1, x2].forEach(x => {
+          ctx.beginPath(); ctx.arc(x, 22, 3, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(x, TABLE_H - 22, 3, 0, Math.PI * 2); ctx.fill();
+        });
+      }
+
       // Head string & foot spot
-      ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+      ctx.strokeStyle = 'rgba(255,255,255,0.22)';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.moveTo(TABLE_W * 0.25, RAIL);
       ctx.lineTo(TABLE_W * 0.25, TABLE_H - RAIL);
       ctx.stroke();
 
-      ctx.fillStyle = 'rgba(255,255,255,0.22)';
+      ctx.fillStyle = 'rgba(255,255,255,0.28)';
       ctx.beginPath();
       ctx.arc(TABLE_W * 0.7, TABLE_H / 2, 4, 0, Math.PI * 2);
       ctx.fill();
 
       // Pockets
       for (const p of POCKETS) {
-        ctx.fillStyle = '#070A0E';
+        ctx.fillStyle = '#060A0F';
         ctx.beginPath();
         ctx.arc(p.x, p.y, POCKET_R, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.strokeStyle = 'rgba(255,255,255,0.14)';
         ctx.lineWidth = 2;
         ctx.stroke();
       }
 
-      // Aiming guideline & cue stick
+      // Miniclip-Style Dual Aiming Guidelines & Cue Stick
       const cue = getCueBall();
       if (cue && cue.active && game.phase === 'aim' && (game.turn === 1 || game.mode === '2p')) {
         const dx = Math.cos(game.aimAngle);
         const dy = Math.sin(game.aimAngle);
 
-        // Simple raycast to nearest rail or ball for aiming preview
-        let bestT = 420;
+        let bestT = 950;
+        let hitBall = null;
         if (dx > 0) bestT = Math.min(bestT, (TABLE_W - RAIL - BALL_R - cue.x) / dx);
         if (dx < 0) bestT = Math.min(bestT, (RAIL + BALL_R - cue.x) / dx);
         if (dy > 0) bestT = Math.min(bestT, (TABLE_H - RAIL - BALL_R - cue.y) / dy);
@@ -1139,53 +1202,103 @@ create policy "Users update own avatar" on storage.objects for update to authent
 
         for (const b of game.balls) {
           if (!b.active || b.num === 0) continue;
-          const ox = b.x - cue.x;
-          const oy = b.y - cue.y;
+          const ox = b.x - cue.x, oy = b.y - cue.y;
           const proj = ox * dx + oy * dy;
           if (proj <= 0) continue;
           const perpSq = (ox * ox + oy * oy) - proj * proj;
           const hitR = BALL_R * 2;
           if (perpSq < hitR * hitR) {
             const t = proj - Math.sqrt(hitR * hitR - perpSq);
-            if (t > 0 && t < bestT) bestT = t;
+            if (t > 0 && t < bestT) {
+              bestT = t;
+              hitBall = b;
+            }
           }
         }
 
-        const endX = cue.x + dx * bestT;
-        const endY = cue.y + dy * bestT;
+        const gx = cue.x + dx * bestT;
+        const gy = cue.y + dy * bestT;
 
         ctx.save();
-        ctx.strokeStyle = 'rgba(255,255,255,0.65)';
-        ctx.lineWidth = 1.6;
-        ctx.setLineDash([6, 6]);
+        // Crisp white main guideline
+        ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(cue.x, cue.y);
-        ctx.lineTo(endX, endY);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.strokeStyle = 'rgba(255,255,255,0.45)';
-        ctx.beginPath();
-        ctx.arc(endX, endY, BALL_R, 0, Math.PI * 2);
+        ctx.lineTo(gx, gy);
         ctx.stroke();
 
-        // Cue stick behind cue ball
-        const pull = 18 + game.power * 52;
-        const stickLen = 210;
+        // Ghost ball circle
+        ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.arc(gx, gy, BALL_R, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Target object ball deflection line + cue tangent line
+        if (hitBall) {
+          const nx = (hitBall.x - gx) / (BALL_R * 2);
+          const ny = (hitBall.y - gy) / (BALL_R * 2);
+          ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+          ctx.lineWidth = 2.2;
+          ctx.beginPath();
+          ctx.moveTo(hitBall.x, hitBall.y);
+          ctx.lineTo(hitBall.x + nx * 90, hitBall.y + ny * 90);
+          ctx.stroke();
+
+          // Cue tangent preview
+          const dot = dx * nx + dy * ny;
+          const tx = dx - dot * nx;
+          const ty = dy - dot * ny;
+          const tLen = Math.hypot(tx, ty);
+          if (tLen > 0.05) {
+            ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(gx, gy);
+            ctx.lineTo(gx + (tx / tLen) * 42, gy + (ty / tLen) * 42);
+            ctx.stroke();
+          }
+        }
+
+        // Cue stick pulling back smoothly with left bar
+        const pull = 16 + game.chargePower * 75;
+        const stickLen = 250;
         const sx = cue.x - dx * pull;
         const sy = cue.y - dy * pull;
+        const midX = cue.x - dx * (pull + stickLen * 0.55);
+        const midY = cue.y - dy * (pull + stickLen * 0.55);
         const ex = cue.x - dx * (pull + stickLen);
         const ey = cue.y - dy * (pull + stickLen);
 
-        ctx.strokeStyle = '#E2B77E';
-        ctx.lineWidth = 6;
+        // Stick shadow
+        ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+        ctx.lineWidth = 7;
         ctx.lineCap = 'round';
         ctx.beginPath();
-        ctx.moveTo(sx, sy);
+        ctx.moveTo(sx + 3, sy + 5);
+        ctx.lineTo(ex + 3, ey + 5);
+        ctx.stroke();
+
+        // Dark handle
+        ctx.strokeStyle = '#3B1E10';
+        ctx.lineWidth = 7.5;
+        ctx.beginPath();
+        ctx.moveTo(midX, midY);
         ctx.lineTo(ex, ey);
         ctx.stroke();
 
+        // Maple shaft
+        ctx.strokeStyle = '#E8C38E';
+        ctx.lineWidth = 5.5;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(midX, midY);
+        ctx.stroke();
+
+        // Blue chalk tip
         ctx.strokeStyle = '#38BDF8';
-        ctx.lineWidth = 6;
+        ctx.lineWidth = 5.5;
         ctx.beginPath();
         ctx.moveTo(sx, sy);
         ctx.lineTo(cue.x - dx * (pull + 6), cue.y - dy * (pull + 6));
@@ -1193,30 +1306,38 @@ create policy "Users update own avatar" on storage.objects for update to authent
         ctx.restore();
       }
 
-      // Draw balls
+      // Ball-in-Hand halo
+      if (cue && cue.active && game.phase === 'ballInHand') {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.9)';
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.arc(cue.x, cue.y, BALL_R + 7, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Draw Balls
       for (const b of game.balls) {
         if (!b.active) continue;
-        // Shadow
-        ctx.fillStyle = 'rgba(0,0,0,0.32)';
+        ctx.fillStyle = 'rgba(0,0,0,0.34)';
         ctx.beginPath();
-        ctx.arc(b.x + 2.5, b.y + 3, BALL_R, 0, Math.PI * 2);
+        ctx.arc(b.x + 2.5, b.y + 3.2, BALL_R, 0, Math.PI * 2);
         ctx.fill();
 
         const color = BALL_COLORS[b.num];
-        const isStripe = b.num >= 9;
-
-        if (isStripe) {
+        if (b.num >= 9) {
           ctx.fillStyle = '#F8FAFC';
           ctx.beginPath();
           ctx.arc(b.x, b.y, BALL_R, 0, Math.PI * 2);
           ctx.fill();
-
           ctx.save();
           ctx.beginPath();
           ctx.arc(b.x, b.y, BALL_R, 0, Math.PI * 2);
           ctx.clip();
           ctx.fillStyle = color;
-          ctx.fillRect(b.x - BALL_R, b.y - BALL_R * 0.55, BALL_R * 2, BALL_R * 1.1);
+          ctx.fillRect(b.x - BALL_R, b.y - BALL_R * 0.56, BALL_R * 2, BALL_R * 1.12);
           ctx.restore();
         } else {
           ctx.fillStyle = color;
@@ -1225,13 +1346,11 @@ create policy "Users update own avatar" on storage.objects for update to authent
           ctx.fill();
         }
 
-        // Number circle
         if (b.num !== 0) {
           ctx.fillStyle = '#F8FAFC';
           ctx.beginPath();
           ctx.arc(b.x, b.y, BALL_R * 0.48, 0, Math.PI * 2);
           ctx.fill();
-
           ctx.fillStyle = '#0F172A';
           ctx.font = 'bold 9px Inter, sans-serif';
           ctx.textAlign = 'center';
@@ -1239,27 +1358,37 @@ create policy "Users update own avatar" on storage.objects for update to authent
           ctx.fillText(String(b.num), b.x, b.y + 0.5);
         }
 
-        // Specular highlight
-        ctx.fillStyle = 'rgba(255,255,255,0.28)';
+        ctx.fillStyle = 'rgba(255,255,255,0.32)';
         ctx.beginPath();
         ctx.arc(b.x - BALL_R * 0.3, b.y - BALL_R * 0.3, BALL_R * 0.25, 0, Math.PI * 2);
         ctx.fill();
       }
     }
 
+    function checkOrientationOverlay() {
+      const isMobilePortrait = window.innerHeight > window.innerWidth && window.innerWidth < 860;
+      const overlay = document.getElementById('rotate-overlay');
+      if (isMobilePortrait && !app.dismissedRotate) {
+        overlay.classList.remove('hidden');
+      } else {
+        overlay.classList.add('hidden');
+      }
+    }
+
     function resizeCanvas() {
+      checkOrientationOverlay();
       const container = document.getElementById('table-container');
-      const availW = Math.max(280, container.clientWidth - 20);
-      const maxH = Math.max(220, window.innerHeight - 290);
+      const availW = Math.max(240, container.clientWidth - 8);
+      const availH = Math.max(160, container.clientHeight - 28);
       let w = availW;
       let h = w / 2;
-      if (h > maxH) {
-        h = maxH;
+      if (h > availH) {
+        h = availH;
         w = h * 2;
       }
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.style.width = `${w}px`;
-      canvas.style.height = `${h}px`;
+      canvas.style.width = `${Math.floor(w)}px`;
+      canvas.style.height = `${Math.floor(h)}px`;
       canvas.width = Math.round(TABLE_W * dpr);
       canvas.height = Math.round(TABLE_H * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -1268,11 +1397,9 @@ create policy "Users update own avatar" on storage.objects for update to authent
 
     function getTablePoint(evt) {
       const rect = canvas.getBoundingClientRect();
-      const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
-      const clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
       return {
-        x: ((clientX - rect.left) / rect.width) * TABLE_W,
-        y: ((clientY - rect.top) / rect.height) * TABLE_H
+        x: ((evt.clientX - rect.left) / rect.width) * TABLE_W,
+        y: ((evt.clientY - rect.top) / rect.height) * TABLE_H
       };
     }
 
@@ -1283,10 +1410,10 @@ create policy "Users update own avatar" on storage.objects for update to authent
     }
 
     // =========================================================================
-    // 5. EVENT WIRING
+    // EVENT WIRING
     // =========================================================================
     function wireEvents() {
-      // Canvas Pointer Controls (Mouse + Touch)
+      // 1. Table Aiming (Touch/Drag anywhere on table aims smoothly without accidental firing)
       canvas.addEventListener('pointerdown', (e) => {
         sound.unlock();
         if (game.phase === 'gameover' || game.phase === 'moving' || game.phase === 'aiThinking') return;
@@ -1303,86 +1430,197 @@ create policy "Users update own avatar" on storage.objects for update to authent
           return;
         }
 
-        game.dragging = true;
-        game.dragStart = pt;
+        game.isAiming = true;
         game.aimAngle = Math.atan2(pt.y - cue.y, pt.x - cue.x);
         canvas.setPointerCapture(e.pointerId);
       });
 
       canvas.addEventListener('pointermove', (e) => {
-        if (!game.dragging || game.phase !== 'aim') return;
+        if (!game.isAiming || game.phase !== 'aim') return;
         const pt = getTablePoint(e);
         const cue = getCueBall();
         game.aimAngle = Math.atan2(pt.y - cue.y, pt.x - cue.x);
+      });
 
-        const pullDist = Math.hypot(pt.x - game.dragStart.x, pt.y - game.dragStart.y);
-        if (pullDist > 12) {
-          game.power = Math.min(1, Math.max(0.15, pullDist / 190));
-          const pct = Math.round(game.power * 100);
-          document.getElementById('power-slider').value = pct;
-          document.getElementById('power-value').textContent = `${pct}%`;
+      canvas.addEventListener('pointerup', () => {
+        game.isAiming = false;
+      });
+
+      // 2. Left Vertical Pull-Back Power Bar (Exact Miniclip 8 Ball Pool Shot Flow)
+      const track = document.getElementById('power-track');
+      let powerStartY = 0;
+
+      track.addEventListener('pointerdown', (e) => {
+        sound.unlock();
+        if (game.phase !== 'aim' || (game.mode === 'ai' && game.turn === 2)) return;
+        game.isCharging = true;
+        powerStartY = e.clientY;
+        game.chargePower = 0.05;
+        updatePowerBarUI(game.chargePower);
+        track.setPointerCapture(e.pointerId);
+      });
+
+      track.addEventListener('pointermove', (e) => {
+        if (!game.isCharging) return;
+        const rect = track.getBoundingClientRect();
+        const delta = Math.max(0, e.clientY - powerStartY);
+        game.chargePower = Math.min(1, delta / Math.max(120, rect.height * 0.72));
+        updatePowerBarUI(game.chargePower);
+      });
+
+      const releasePowerBar = () => {
+        if (!game.isCharging) return;
+        const p = game.chargePower;
+        game.isCharging = false;
+        if (p >= 0.08 && game.phase === 'aim') {
+          shootCueBall(game.aimAngle, p);
+        } else {
+          // Released back at top = cancel shot cleanly
+          game.chargePower = 0;
+          updatePowerBarUI(0);
         }
+      };
+
+      track.addEventListener('pointerup', releasePowerBar);
+      track.addEventListener('pointercancel', () => {
+        game.isCharging = false;
+        game.chargePower = 0;
+        updatePowerBarUI(0);
       });
 
-      canvas.addEventListener('pointerup', (e) => {
-        if (!game.dragging) return;
-        game.dragging = false;
-        const pt = getTablePoint(e);
-        const dragDist = Math.hypot(pt.x - game.dragStart.x, pt.y - game.dragStart.y);
-        if (dragDist > 22 && game.phase === 'aim') {
-          shootCueBall(game.aimAngle, game.power);
-        }
-      });
-
-      // Power slider & Shoot button
-      const slider = document.getElementById('power-slider');
-      slider.addEventListener('input', () => {
-        game.power = Number(slider.value) / 100;
-        document.getElementById('power-value').textContent = `${slider.value}%`;
-      });
-      document.getElementById('btn-shoot').addEventListener('click', () => {
-        if (game.phase === 'aim' && (game.turn === 1 || game.mode === '2p')) {
-          shootCueBall(game.aimAngle, game.power);
-        }
-      });
-
-      // Keyboard fine-aiming (Left/Right arrows + Space to shoot)
+      // 3. PC Keyboard Fine-Aiming & Spacebar Power Shot
       window.addEventListener('keydown', (e) => {
         if (document.activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
         if (game.phase !== 'aim' || (game.mode === 'ai' && game.turn === 2)) return;
-        if (e.key === 'ArrowLeft') { e.preventDefault(); game.aimAngle -= 0.03; }
-        else if (e.key === 'ArrowRight') { e.preventDefault(); game.aimAngle += 0.03; }
-        else if (e.key === ' ') { e.preventDefault(); shootCueBall(game.aimAngle, game.power); }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); game.aimAngle -= 0.02; }
+        else if (e.key === 'ArrowRight') { e.preventDefault(); game.aimAngle += 0.02; }
+        else if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          game.chargePower = Math.min(1, game.chargePower + 0.08);
+          updatePowerBarUI(game.chargePower);
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          game.chargePower = Math.max(0, game.chargePower - 0.08);
+          updatePowerBarUI(game.chargePower);
+        } else if (e.key === ' ') {
+          e.preventDefault();
+          shootCueBall(game.aimAngle, game.chargePower > 0.1 ? game.chargePower : 0.65);
+        }
       });
 
-      // Mode, Stake & New Match
+      // 4. Landscape Fullscreen Lock
+      const enterLandscapeFullscreen = async () => {
+        try {
+          if (document.documentElement.requestFullscreen) {
+            await document.documentElement.requestFullscreen();
+          }
+          if (screen.orientation && screen.orientation.lock) {
+            await screen.orientation.lock('landscape');
+          }
+        } catch (_) {
+          // iOS Safari may block programmatic orientation lock; dismiss gracefully
+        }
+        app.dismissedRotate = true;
+        checkOrientationOverlay();
+        resizeCanvas();
+      };
+
+      document.getElementById('btn-force-landscape').addEventListener('click', enterLandscapeFullscreen);
+      document.getElementById('btn-dismiss-rotate').addEventListener('click', () => {
+        app.dismissedRotate = true;
+        checkOrientationOverlay();
+      });
+      document.getElementById('btn-fullscreen').addEventListener('click', () => {
+        if (!document.fullscreenElement) enterLandscapeFullscreen();
+        else document.exitFullscreen().catch(() => {});
+      });
+
+      // 5. Welcome Overlay
+      document.getElementById('btn-welcome-guest').addEventListener('click', () => {
+        sound.unlock();
+        document.getElementById('welcome-overlay').classList.add('hidden');
+      });
+      document.getElementById('btn-welcome-login').addEventListener('click', () => {
+        sound.unlock();
+        document.getElementById('welcome-overlay').classList.add('hidden');
+        renderProfileUI();
+        document.getElementById('profile-modal').classList.remove('hidden');
+      });
+
+      // 6. Spin Selector
+      document.getElementById('btn-spin').addEventListener('click', () => {
+        document.getElementById('spin-modal').classList.remove('hidden');
+      });
+      document.getElementById('btn-close-spin').addEventListener('click', () => {
+        document.getElementById('spin-modal').classList.add('hidden');
+      });
+      document.getElementById('btn-reset-spin').addEventListener('click', () => {
+        game.spinX = 0; game.spinY = 0;
+        updateSpinUI();
+      });
+      const spinPad = document.getElementById('spin-pad');
+      const setSpinFromEvent = (e) => {
+        const rect = spinPad.getBoundingClientRect();
+        let nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        let ny = ((e.clientY - rect.top) / rect.height) * 2 - 1;
+        const len = Math.hypot(nx, ny);
+        if (len > 0.85) { nx = (nx / len) * 0.85; ny = (ny / len) * 0.85; }
+        game.spinX = nx;
+        game.spinY = ny;
+        updateSpinUI();
+      };
+      spinPad.addEventListener('pointerdown', (e) => {
+        spinPad.setPointerCapture(e.pointerId);
+        setSpinFromEvent(e);
+      });
+      spinPad.addEventListener('pointermove', (e) => {
+        if (e.buttons > 0) setSpinFromEvent(e);
+      });
+
+      // 7. Menu Modal
+      document.getElementById('btn-menu').addEventListener('click', () => {
+        document.getElementById('menu-modal').classList.remove('hidden');
+      });
+      document.getElementById('btn-close-menu').addEventListener('click', () => {
+        document.getElementById('menu-modal').classList.add('hidden');
+      });
       document.getElementById('select-mode').addEventListener('change', (e) => {
         game.mode = e.target.value;
         setupRack();
+        document.getElementById('menu-modal').classList.add('hidden');
       });
       document.getElementById('select-stake').addEventListener('change', (e) => {
         game.stake = Number(e.target.value) || 100;
+        document.getElementById('hud-pot').textContent = (game.stake * 2).toLocaleString();
       });
-      document.getElementById('btn-new-rack').addEventListener('click', setupRack);
+      document.getElementById('btn-new-rack').addEventListener('click', () => {
+        setupRack();
+        document.getElementById('menu-modal').classList.add('hidden');
+      });
       document.getElementById('btn-play-again').addEventListener('click', setupRack);
 
-      // Mute toggle
       document.getElementById('btn-mute').addEventListener('click', () => {
         sound.muted = !sound.muted;
-        const icon = document.getElementById('icon-mute');
-        icon.setAttribute('data-lucide', sound.muted ? 'volume-x' : 'volume-2');
+        document.getElementById('icon-mute').setAttribute('data-lucide', sound.muted ? 'volume-x' : 'volume-2');
+        document.getElementById('mute-label').textContent = sound.muted ? 'Muted' : 'Sound On';
         if (window.lucide) window.lucide.createIcons();
       });
+      document.getElementById('btn-menu-profile').addEventListener('click', () => {
+        document.getElementById('menu-modal').classList.add('hidden');
+        renderProfileUI();
+        document.getElementById('profile-modal').classList.remove('hidden');
+      });
 
-      // Rewarded Ad Flow (Ready to replace with @capacitor-community/admob)
+      // 8. Rewarded Ad Coins
       const openRewardedAd = () => {
+        document.getElementById('menu-modal').classList.add('hidden');
         if (app.adTimer) clearInterval(app.adTimer);
         document.getElementById('ad-modal').classList.remove('hidden');
-        const claimBtn = document.getElementById('btn-claim-ad');
+        const btn = document.getElementById('btn-claim-ad');
         const countEl = document.getElementById('ad-countdown');
         let sec = 5;
-        claimBtn.disabled = true;
-        claimBtn.textContent = 'Watching ad...';
+        btn.disabled = true;
+        btn.textContent = 'Please wait...';
         countEl.textContent = `${sec}s`;
 
         app.adTimer = setInterval(() => {
@@ -1390,9 +1628,9 @@ create policy "Users update own avatar" on storage.objects for update to authent
           if (sec <= 0) {
             clearInterval(app.adTimer);
             app.adTimer = null;
-            countEl.textContent = 'Ready!';
-            claimBtn.disabled = false;
-            claimBtn.textContent = 'Claim +500 Coins';
+            countEl.textContent = '+500';
+            btn.disabled = false;
+            btn.textContent = 'Claim +500 Coins';
           } else {
             countEl.textContent = `${sec}s`;
           }
@@ -1400,6 +1638,7 @@ create policy "Users update own avatar" on storage.objects for update to authent
       };
 
       document.getElementById('btn-watch-ad').addEventListener('click', openRewardedAd);
+      document.getElementById('btn-menu-ad').addEventListener('click', openRewardedAd);
       document.getElementById('btn-gameover-ad').addEventListener('click', openRewardedAd);
       document.getElementById('btn-claim-ad').addEventListener('click', async () => {
         app.profile.coins += 500;
@@ -1408,7 +1647,7 @@ create policy "Users update own avatar" on storage.objects for update to authent
         showToast('+500 Coins added!', 'success');
       });
 
-      // Profile Modal & DP Auto-Compression
+      // 9. Profile & Auth Modal
       document.getElementById('btn-open-profile').addEventListener('click', () => {
         renderProfileUI();
         document.getElementById('profile-modal').classList.remove('hidden');
@@ -1425,16 +1664,13 @@ create policy "Users update own avatar" on storage.objects for update to authent
           app.pendingDpBlob = blob;
           app.pendingDpPreview = dataUrl;
           document.getElementById('modal-avatar').src = dataUrl;
-          document.getElementById('dp-compress-info').textContent = `Compressed: ${(blob.size / 1024).toFixed(1)} KB (256×256 WebP)`;
         } catch (err) {
           showToast(err.message, 'error');
         }
       });
 
       document.getElementById('btn-save-profile').addEventListener('click', async () => {
-        const name = document.getElementById('input-username').value.trim() || 'Player';
-        app.profile.username = name;
-
+        app.profile.username = document.getElementById('input-username').value.trim() || 'Player';
         if (app.pendingDpBlob) {
           if (app.sb && app.user) {
             const path = `${app.user.id}/avatar.webp`;
@@ -1442,7 +1678,7 @@ create policy "Users update own avatar" on storage.objects for update to authent
               .from('avatars')
               .upload(path, app.pendingDpBlob, { contentType: 'image/webp', upsert: true });
             if (error) {
-              showToast(`DP upload failed: ${error.message}`, 'error');
+              showToast(error.message, 'error');
             } else {
               const { data } = app.sb.storage.from('avatars').getPublicUrl(path);
               app.profile.avatar_url = `${data.publicUrl}?t=${Date.now()}`;
@@ -1453,16 +1689,14 @@ create policy "Users update own avatar" on storage.objects for update to authent
           app.pendingDpBlob = null;
           app.pendingDpPreview = null;
         }
-
         await persistProfileChanges();
+        document.getElementById('profile-modal').classList.add('hidden');
         showToast('Profile saved', 'success');
       });
 
-      // Supabase Auth in Profile Modal
       async function runAuth(isSignUp) {
         if (!app.sb) {
-          showToast('Add your Supabase URL & Key in DB Setup first.', 'error');
-          document.getElementById('sql-modal').classList.remove('hidden');
+          showToast('Add SUPABASE_CONFIG keys in index.html to enable cloud login.', 'error');
           return;
         }
         const email = document.getElementById('auth-email').value.trim();
@@ -1474,25 +1708,19 @@ create policy "Users update own avatar" on storage.objects for update to authent
         const res = isSignUp
           ? await app.sb.auth.signUp({ email, password })
           : await app.sb.auth.signInWithPassword({ email, password });
-
-        if (res.error) {
-          showToast(res.error.message, 'error');
-          return;
-        }
+        if (res.error) { showToast(res.error.message, 'error'); return; }
         if (res.data.user && res.data.session) {
           app.user = res.data.user;
           await syncProfileFromCloud();
           renderProfileUI();
-          showToast(isSignUp ? 'Account created & synced!' : 'Signed in!', 'success');
+          document.getElementById('profile-modal').classList.add('hidden');
+          showToast(isSignUp ? 'Account created!' : 'Signed in!', 'success');
         } else {
-          showToast('Check your email to confirm signup, then sign in.', 'success');
+          showToast('Check your email to confirm signup.', 'success');
         }
       }
 
-      document.getElementById('pool-auth-form').addEventListener('submit', (e) => {
-        e.preventDefault();
-        runAuth(false);
-      });
+      document.getElementById('pool-auth-form').addEventListener('submit', (e) => { e.preventDefault(); runAuth(false); });
       document.getElementById('btn-signup').addEventListener('click', () => runAuth(true));
       document.getElementById('btn-signout').addEventListener('click', async () => {
         if (app.sb) await app.sb.auth.signOut().catch(() => {});
@@ -1501,42 +1729,12 @@ create policy "Users update own avatar" on storage.objects for update to authent
         showToast('Signed out', 'info');
       });
 
-      // SQL & Keys Modal
-      document.getElementById('pool-sql-block').textContent = POOL_SETUP_SQL;
-      document.getElementById('btn-open-sql').addEventListener('click', () => {
-        document.getElementById('sql-modal').classList.remove('hidden');
-      });
-      document.getElementById('btn-close-sql').addEventListener('click', () => {
-        document.getElementById('sql-modal').classList.add('hidden');
-      });
-      document.getElementById('btn-save-sb-keys').addEventListener('click', () => {
-        const url = document.getElementById('sb-url-input').value.trim();
-        const anonKey = document.getElementById('sb-key-input').value.trim();
-        try { localStorage.setItem(STORAGE_KEY_SB, JSON.stringify({ url, anonKey })); } catch (_) {}
-        initSupabase();
-        showToast('Supabase keys saved', 'success');
-      });
-      document.getElementById('btn-copy-pool-sql').addEventListener('click', async () => {
-        try {
-          await navigator.clipboard.writeText(POOL_SETUP_SQL);
-          showToast('SQL copied', 'success');
-        } catch (_) {
-          const ta = document.createElement('textarea');
-          ta.value = POOL_SETUP_SQL;
-          document.body.appendChild(ta);
-          ta.select();
-          document.execCommand('copy');
-          ta.remove();
-          showToast('SQL copied', 'success');
-        }
-      });
-
       window.addEventListener('resize', resizeCanvas);
+      window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 150));
     }
 
-    window.onload = () => {
+    window.onload = async () => {
       loadLocalProfile();
-      initSupabase();
       wireEvents();
       renderProfileUI();
       setupRack();
@@ -1544,6 +1742,7 @@ create policy "Users update own avatar" on storage.objects for update to authent
       if (window.lucide) window.lucide.createIcons();
       if (game.rafId) cancelAnimationFrame(game.rafId);
       game.rafId = requestAnimationFrame(gameLoop);
+      await initSupabase();
     };
   </script>
 </body>
